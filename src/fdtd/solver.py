@@ -32,9 +32,6 @@ class Solver:
         self.options = options
         
         self._mesh = copy.deepcopy(mesh)
-        self._subsolvers = []
-        for submesh in self._mesh.submeshes:
-            self._subsolvers.append(Solver(submesh, options, probes, sources))
 
         self._probes = copy.deepcopy(probes)
         for p in self._probes:
@@ -67,11 +64,6 @@ class Solver:
 
     def getProbes(self):
         res = self._probes
-        for p in res:
-            p["subprobes"] = []
-            for s in self._subsolvers:
-                p["subprobes"] = s.getProbes()
-
         return res
 
     # ======================= UPDATE E =============================
@@ -109,8 +101,6 @@ class Solver:
         
         (dX, dY) = self._mesh.steps()
         A = dX * dY
-        (A0, A1, A1Corner) = self._mesh.subgridAreas(self.options["subgridType"])
-        (dA, dB, dC, dD) = self._mesh.subgridSteps(self.options["subgridType"])
               
         hNew[:,:] = h[:,:] \
                      - dt/A * dY * ey[1:,  :] \
@@ -135,17 +125,7 @@ class Solver:
             else:
                 raise ValueError("Invalid source type: " + source["type"])
         
-        if "localTimeStepping" in self.options \
-            and self.options["localTimeStepping"]:
-            h[:] = hNew[:]
-            for s in self._subsolvers:
-                s._updateE(t, dt/2.0, self.old)
-            for s in self._subsolvers:
-                s._updateH(t+dt/2.0, dt/2.0)
-        else:
-            for s in self._subsolvers:
-                s._updateH(t, dt)
-            h[:] = hNew[:]
+        h[:] = hNew[:]
             
     def _updateProbes(self, t):
         for p in self._probes:
@@ -160,8 +140,6 @@ class Solver:
                 values[:,:] = \
                     self.old.hz[ idx[L][X]:idx[U][X], idx[L][Y]:idx[U][Y] ]
                 p["values"].append(values)
-        for s in self._subsolvers:
-            s._updateProbes(t)
 
     def solve(self, dimensionalFinalTime):
         tic = time.time()
